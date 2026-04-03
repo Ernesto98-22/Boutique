@@ -1,0 +1,505 @@
+// app.js - Paso Firme (IIFE)
+(function() {
+    'use strict';
+    
+    const supabase = window.supabaseClient;
+    let currentUser = null;
+    let currentUsername = null;
+    let currentUserId = null;
+    let productsData = [];
+    let currentTestimonioIndex = 0;
+    let testimoniosData = [];
+    let favoritos = new Set();
+    let currentCategory = 'todos';
+    
+    // ========================================
+    // INICIALIZACIÓN
+    // ========================================
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!supabase) {
+            console.error('Supabase no inicializado');
+            mostrarErrorGlobal('Error de conexión con la base de datos.');
+            return;
+        }
+        
+        await checkSession();
+        await loadProducts();
+        await loadTestimonios();
+        initNavigation();
+        initCategoryFilter();
+        initSearch();
+        initAuthModal();
+        initScrollEffects();
+        loadFavoritosFromStorage();
+    });
+    
+    function mostrarErrorGlobal(msg) {
+        const div = document.createElement('div');
+        div.className = 'global-error';
+        div.innerHTML = `<div style="background:#fee2e2; color:#991b1b; padding:1rem; margin:1rem; border-radius:12px; text-align:center;">${msg}</div>`;
+        document.body.prepend(div);
+        setTimeout(() => div.remove(), 5000);
+    }
+    
+    // ========================================
+    // AUTENTICACIÓN
+    // ========================================
+    async function checkSession() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            currentUser = session.user;
+            currentUserId = session.user.id;
+            currentUsername = session.user.user_metadata?.username || session.user.email.split('@')[0];
+            
+            const { data: adminData } = await supabase
+                .from('admin_emails')
+                .select('email')
+                .eq('email', session.user.email)
+                .single();
+            
+            const isAdmin = !!adminData;
+            updateAuthUI(true, isAdmin);
+        } else {
+            updateAuthUI(false, false);
+        }
+    }
+    
+    function updateAuthUI(loggedIn, isAdmin) {
+        const authBtn = document.getElementById('authBtn');
+        const navActions = document.getElementById('navActions');
+        
+        if (loggedIn && currentUser) {
+            authBtn.innerHTML = `<i class="fas fa-user"></i> ${currentUsername}`;
+            authBtn.onclick = () => {
+                if (isAdmin) {
+                    if (confirm(`Hola ${currentUsername}. ¿Ir al panel de administración?`)) {
+                        window.location.href = 'admin.html';
+                    }
+                } else {
+                    alert(`Sesión iniciada como ${currentUsername}`);
+                }
+            };
+            
+            if (isAdmin && !document.getElementById('adminNavBtn')) {
+                const adminBtn = document.createElement('a');
+                adminBtn.id = 'adminNavBtn';
+                adminBtn.href = 'admin.html';
+                adminBtn.className = 'nav-comprar';
+                adminBtn.innerHTML = '<i class="fas fa-user-shield"></i> Admin';
+                adminBtn.style.marginLeft = '0.5rem';
+                navActions.appendChild(adminBtn);
+            }
+            
+            document.querySelectorAll('#comprarNavBtn, .btn-primary[href="#catalogo"], .catalogo-footer .btn-primary').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    window.open('https://wa.me/5351234567?text=Hola,%20quiero%20comprar%20en%20Paso%20Firme', '_blank');
+                };
+            });
+        } else {
+            authBtn.innerHTML = `<i class="fas fa-user"></i> Acceder`;
+            authBtn.onclick = () => toggleModal(true);
+            
+            const adminNavBtn = document.getElementById('adminNavBtn');
+            if (adminNavBtn) adminNavBtn.remove();
+            
+            document.querySelectorAll('#comprarNavBtn, .btn-primary[href="#catalogo"], .catalogo-footer .btn-primary').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    toggleModal(true);
+                };
+            });
+        }
+    }
+    
+    function initAuthModal() {
+        const modal = document.getElementById('authModal');
+        const closeBtn = document.getElementById('closeModal');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        
+        if (closeBtn) closeBtn.onclick = () => toggleModal(false);
+        window.onclick = (e) => { if (e.target === modal) toggleModal(false); };
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) toggleModal(false); });
+        
+        tabBtns.forEach(btn => {
+            btn.onclick = () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const tab = btn.dataset.tab;
+                loginForm.classList.toggle('active', tab === 'login');
+                registerForm.classList.toggle('active', tab === 'register');
+            };
+        });
+        
+        loginForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const statusDiv = document.getElementById('loginStatus');
+            
+            if (!username || !password) {
+                showFormStatus(statusDiv, 'Completa todos los campos', 'error');
+                return;
+            }
+            
+            const { error } = await supabase.auth.signInWithPassword({
+                email: username.includes('@') ? username : `${username}@temp.local`,
+                password
+            });
+            
+            if (error) {
+                showFormStatus(statusDiv, 'Credenciales inválidas', 'error');
+            } else {
+                showFormStatus(statusDiv, 'Inicio de sesión exitoso', 'success');
+                setTimeout(() => {
+                    toggleModal(false);
+                    checkSession();
+                }, 1500);
+            }
+        };
+        
+        registerForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('registerUsername').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const statusDiv = document.getElementById('registerStatus');
+            
+            if (!username || !email || !password) {
+                showFormStatus(statusDiv, 'Completa los campos obligatorios', 'error');
+                return;
+            }
+            if (password.length < 6) {
+                showFormStatus(statusDiv, 'La contraseña debe tener al menos 6 caracteres', 'error');
+                return;
+            }
+            
+            const { error } = await supabase.auth.signUp({
+                email: email,
+                password,
+                options: { data: { username, phone } }
+            });
+            
+            if (error) {
+                showFormStatus(statusDiv, 'Error: ' + error.message, 'error');
+            } else {
+                showFormStatus(statusDiv, 'Cuenta creada. Inicia sesión.', 'success');
+                setTimeout(() => {
+                    document.querySelector('.tab-btn[data-tab="login"]').click();
+                    registerForm.reset();
+                }, 2000);
+            }
+        };
+    }
+    
+    function toggleModal(show) {
+        const modal = document.getElementById('authModal');
+        if (modal) {
+            modal.classList.toggle('active', show);
+            document.body.style.overflow = show ? 'hidden' : '';
+        }
+    }
+    
+    function showFormStatus(element, message, type) {
+        element.textContent = message;
+        element.className = `form-status ${type}`;
+        setTimeout(() => {
+            element.textContent = '';
+            element.className = 'form-status';
+        }, 3000);
+    }
+    
+    // ========================================
+    // PRODUCTOS
+    // ========================================
+    async function loadProducts() {
+        const { data, error } = await supabase.from('productos').select('*');
+        if (error) {
+            console.error('Error cargando productos:', error);
+            productsData = getFallbackProducts();
+        } else {
+            productsData = data;
+        }
+        renderProducts(currentCategory);
+    }
+    
+    function getFallbackProducts() {
+         return [
+        { id: 1, nombre: 'Camisa Oxford Azul', precio: 4500, categoria: 'camisas', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Camisa+Azul' },
+        { id: 2, nombre: 'Pantalón Gris Formal', precio: 6500, categoria: 'pantalones', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Pantalon+Gris' },
+        { id: 3, nombre: 'Short Beige Casual', precio: 3500, categoria: 'shorts', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Short+Beige' },
+        { id: 4, nombre: 'Sneakers Blancos', precio: 8500, categoria: 'zapatos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Sneakers' },
+        { id: 5, nombre: 'Conjunto Niña Amarillo', precio: 4200, categoria: 'ninos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Conjunto+Niño' }
+    ];
+    }
+    
+    function renderProducts(category) {
+        const grid = document.getElementById('productosGrid');
+        if (!grid) return;
+        
+        const filtered = category === 'todos' 
+            ? productsData 
+            : productsData.filter(p => p.categoria === category);
+        
+        if (filtered.length === 0) {
+            grid.innerHTML = '<div class="no-products">No hay productos en esta categoría.</div>';
+            return;
+        }
+        
+        grid.innerHTML = filtered.map(p => `
+            <article class="product-card" data-id="${p.id}">
+                <img src="${p.imagen_url}" alt="${p.nombre}" loading="lazy">
+                <div class="product-actions">
+                    <button class="favorite-btn ${favoritos.has(p.id) ? 'liked' : ''}" data-id="${p.id}" aria-label="${favoritos.has(p.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+                <div class="purchase-arrow" data-id="${p.id}" role="button" tabindex="0" aria-label="Comprar ${p.nombre}">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-title">${escapeHtml(p.nombre)}</h3>
+                    <p class="product-price">$${p.precio.toLocaleString()} CUP</p>
+                </div>
+            </article>
+        `).join('');
+        
+        attachProductEvents();
+    }
+    
+    function attachProductEvents() {
+        document.querySelectorAll('.favorite-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.dataset.id);
+                if (favoritos.has(id)) {
+                    favoritos.delete(id);
+                    btn.classList.remove('liked');
+                } else {
+                    favoritos.add(id);
+                    btn.classList.add('liked');
+                }
+                saveFavoritosToStorage();
+            };
+        });
+        
+        document.querySelectorAll('.purchase-arrow').forEach(arrow => {
+            arrow.onclick = (e) => {
+                e.stopPropagation();
+                const id = parseInt(arrow.dataset.id);
+                const producto = productsData.find(p => p.id === id);
+                if (producto) {
+                    if (currentUser) {
+                        const mensaje = `Hola! Me interesa comprar: ${producto.nombre} - $${producto.precio} CUP`;
+                        window.open(`https://wa.me/5351234567?text=${encodeURIComponent(mensaje)}`, '_blank');
+                    } else {
+                        toggleModal(true);
+                    }
+                }
+            };
+        });
+    }
+    
+    function initCategoryFilter() {
+        const catBtns = document.querySelectorAll('.cat-btn');
+        catBtns.forEach(btn => {
+            btn.onclick = () => {
+                catBtns.forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+                currentCategory = btn.dataset.category;
+                renderProducts(currentCategory);
+            };
+        });
+    }
+    
+    function initSearch() {
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const performSearch = () => {
+            const term = searchInput.value.trim().toLowerCase();
+            if (!term) {
+                renderProducts(currentCategory);
+                return;
+            }
+            const filtered = productsData.filter(p => p.nombre.toLowerCase().includes(term));
+            const grid = document.getElementById('productosGrid');
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="no-products">No se encontraron productos.</div>';
+            } else {
+                grid.innerHTML = filtered.map(p => `
+                    <article class="product-card" data-id="${p.id}">
+                        <img src="${p.imagen_url}" alt="${p.nombre}" loading="lazy">
+                        <div class="product-actions">
+                            <button class="favorite-btn ${favoritos.has(p.id) ? 'liked' : ''}" data-id="${p.id}">
+                                <i class="fas fa-heart"></i>
+                            </button>
+                        </div>
+                        <div class="purchase-arrow" data-id="${p.id}">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                        <div class="product-info">
+                            <h3 class="product-title">${escapeHtml(p.nombre)}</h3>
+                            <p class="product-price">$${p.precio.toLocaleString()} CUP</p>
+                        </div>
+                    </article>
+                `).join('');
+                attachProductEvents();
+            }
+        };
+        searchBtn.onclick = performSearch;
+        searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
+    }
+    
+    // ========================================
+    // TESTIMONIOS (RESEÑAS)
+    // ========================================
+    async function loadTestimonios() {
+        const { data, error } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('approved', true)
+            .order('created_at', { ascending: false });
+        
+        if (error || !data || data.length === 0) {
+            testimoniosData = [
+                { nombre_usuario: "María G.", comentario: "Excelente calidad y atención. Los zapatos son increíbles.", rating: 5 },
+                { nombre_usuario: "Carlos R.", comentario: "La ropa es de primera, volveré a comprar.", rating: 4 },
+                { nombre_usuario: "Ana L.", comentario: "Diseños únicos, me encanta su estilo.", rating: 5 }
+            ];
+        } else {
+            testimoniosData = data;
+        }
+        renderTestimonio(0);
+        initTestimoniosCarousel();
+    }
+    
+    function renderTestimonio(index) {
+        const slider = document.getElementById('testimoniosSlider');
+        if (!slider) return;
+        const t = testimoniosData[index % testimoniosData.length];
+        const stars = '★'.repeat(t.rating) + '☆'.repeat(5 - t.rating);
+        slider.innerHTML = `
+            <div class="testimonio-item">
+                <div class="testimonio-rating">${stars}</div>
+                <p class="testimonio-text">"${escapeHtml(t.comentario)}"</p>
+                <p class="testimonio-author">— ${escapeHtml(t.nombre_usuario)}</p>
+            </div>
+        `;
+    }
+    
+    function initTestimoniosCarousel() {
+        const prev = document.getElementById('prevTestimonio');
+        const next = document.getElementById('nextTestimonio');
+        if (prev && next) {
+            prev.onclick = () => {
+                currentTestimonioIndex = (currentTestimonioIndex - 1 + testimoniosData.length) % testimoniosData.length;
+                renderTestimonio(currentTestimonioIndex);
+            };
+            next.onclick = () => {
+                currentTestimonioIndex = (currentTestimonioIndex + 1) % testimoniosData.length;
+                renderTestimonio(currentTestimonioIndex);
+            };
+        }
+    }
+    
+    // ========================================
+    // FAVORITOS (localStorage)
+    // ========================================
+    function loadFavoritosFromStorage() {
+        const saved = localStorage.getItem('pasofirme_favoritos');
+        if (saved) {
+            favoritos = new Set(JSON.parse(saved));
+        }
+    }
+    
+    function saveFavoritosToStorage() {
+        localStorage.setItem('pasofirme_favoritos', JSON.stringify([...favoritos]));
+    }
+    
+    // ========================================
+    // NAVEGACIÓN Y EFECTOS
+    // ========================================
+    function initNavigation() {
+        const menuToggle = document.getElementById('menuToggle');
+        const navLinks = document.querySelector('.nav-links');
+        const navActions = document.querySelector('.nav-actions');
+        
+        if (menuToggle) {
+            menuToggle.onclick = () => {
+                const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+                menuToggle.setAttribute('aria-expanded', !expanded);
+                navLinks.classList.toggle('active');
+                navActions.classList.toggle('active');
+            };
+        }
+        
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.onclick = () => {
+                navLinks.classList.remove('active');
+                navActions.classList.remove('active');
+                if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+            };
+        });
+        
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href !== '#') {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    }
+    
+    function initScrollEffects() {
+        const heroNav = document.querySelector('.hero-nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 100) {
+                heroNav.style.background = 'rgba(0,0,0,0.9)';
+                heroNav.style.backdropFilter = 'blur(10px)';
+            } else {
+                heroNav.style.background = 'transparent';
+                heroNav.style.backdropFilter = 'none';
+            }
+        });
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        document.querySelectorAll('.feature, .product-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            observer.observe(el);
+        });
+    }
+    
+    // ========================================
+    // UTILIDADES
+    // ========================================
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
+})(); // Fin del IIFE
