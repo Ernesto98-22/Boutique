@@ -1,8 +1,8 @@
-// app.js - Paso Firme (IIFE)
+// app.js - Paso Firme (versión boutique, con window.supabase)
 (function() {
     'use strict';
     
-    const supabase = window.supabaseClient;
+    const supabase = window.supabase;
     let currentUser = null;
     let currentUsername = null;
     let currentUserId = null;
@@ -11,6 +11,26 @@
     let testimoniosData = [];
     let favoritos = new Set();
     let currentCategory = 'todos';
+
+    // Función global para abrir el modal (llamada desde HTML)
+    window.mostrarModal = function() {
+        const modal = document.getElementById('authModal');
+        if (modal) {
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            console.log('Modal abierto');
+        } else {
+            console.error('Modal no encontrado');
+        }
+    };
+
+    function cerrarModal() {
+        const modal = document.getElementById('authModal');
+        if (modal) {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
     
     // ========================================
     // INICIALIZACIÓN
@@ -98,7 +118,7 @@
             });
         } else {
             authBtn.innerHTML = `<i class="fas fa-user"></i> Acceder`;
-            authBtn.onclick = () => toggleModal(true);
+            authBtn.onclick = () => window.mostrarModal();
             
             const adminNavBtn = document.getElementById('adminNavBtn');
             if (adminNavBtn) adminNavBtn.remove();
@@ -106,7 +126,7 @@
             document.querySelectorAll('#comprarNavBtn, .btn-primary[href="#catalogo"], .catalogo-footer .btn-primary').forEach(btn => {
                 btn.onclick = (e) => {
                     e.preventDefault();
-                    toggleModal(true);
+                    window.mostrarModal();
                 };
             });
         }
@@ -119,9 +139,11 @@
         const loginForm = document.getElementById('loginForm');
         const registerForm = document.getElementById('registerForm');
         
-        if (closeBtn) closeBtn.onclick = () => toggleModal(false);
-        window.onclick = (e) => { if (e.target === modal) toggleModal(false); };
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) toggleModal(false); });
+        if (!modal) return;
+        
+        if (closeBtn) closeBtn.onclick = () => cerrarModal();
+        window.onclick = (e) => { if (e.target === modal) cerrarModal(); };
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) cerrarModal(); });
         
         tabBtns.forEach(btn => {
             btn.onclick = () => {
@@ -135,26 +157,26 @@
         
         loginForm.onsubmit = async (e) => {
             e.preventDefault();
-            const username = document.getElementById('loginUsername').value.trim();
+            let identifier = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
             const statusDiv = document.getElementById('loginStatus');
             
-            if (!username || !password) {
+            if (!identifier || !password) {
                 showFormStatus(statusDiv, 'Completa todos los campos', 'error');
                 return;
             }
-            
-            const { error } = await supabase.auth.signInWithPassword({
-                email: username.includes('@') ? username : `${username}@temp.local`,
-                password
-            });
-            
+            let email = identifier;
+            if (identifier.startsWith('+53') || /^[0-9]{8}$/.test(identifier)) {
+                let phone = identifier.startsWith('+53') ? identifier : '+53' + identifier;
+                email = phone.replace(/\s/g, '') + '@temp.local';
+            }
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
                 showFormStatus(statusDiv, 'Credenciales inválidas', 'error');
             } else {
                 showFormStatus(statusDiv, 'Inicio de sesión exitoso', 'success');
                 setTimeout(() => {
-                    toggleModal(false);
+                    cerrarModal();
                     checkSession();
                 }, 1500);
             }
@@ -164,11 +186,11 @@
             e.preventDefault();
             const username = document.getElementById('registerUsername').value.trim();
             const email = document.getElementById('registerEmail').value.trim();
-            const phone = document.getElementById('registerPhone').value.trim();
+            let phone = document.getElementById('registerPhone').value.trim();
             const password = document.getElementById('registerPassword').value;
             const statusDiv = document.getElementById('registerStatus');
             
-            if (!username || !email || !password) {
+            if (!username || !phone || !password) {
                 showFormStatus(statusDiv, 'Completa los campos obligatorios', 'error');
                 return;
             }
@@ -176,13 +198,18 @@
                 showFormStatus(statusDiv, 'La contraseña debe tener al menos 6 caracteres', 'error');
                 return;
             }
-            
+            if (!phone.startsWith('+53')) phone = '+53 ' + phone;
+            const phonePattern = /^\+53\s?[0-9]{8}$/;
+            if (!phonePattern.test(phone)) {
+                showFormStatus(statusDiv, 'Teléfono debe tener formato +53 seguido de 8 dígitos', 'error');
+                return;
+            }
+            const userEmail = email ? email : phone.replace(/\s/g, '') + '@temp.local';
             const { error } = await supabase.auth.signUp({
-                email: email,
+                email: userEmail,
                 password,
-                options: { data: { username, phone } }
+                options: { data: { username, phone, email_original: email } }
             });
-            
             if (error) {
                 showFormStatus(statusDiv, 'Error: ' + error.message, 'error');
             } else {
@@ -220,20 +247,22 @@
         if (error) {
             console.error('Error cargando productos:', error);
             productsData = getFallbackProducts();
-        } else {
+        } else if (data && data.length > 0) {
             productsData = data;
+        } else {
+            productsData = getFallbackProducts();
         }
         renderProducts(currentCategory);
     }
     
     function getFallbackProducts() {
-         return [
-        { id: 1, nombre: 'Camisa Oxford Azul', precio: 4500, categoria: 'camisas', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Camisa+Azul' },
-        { id: 2, nombre: 'Pantalón Gris Formal', precio: 6500, categoria: 'pantalones', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Pantalon+Gris' },
-        { id: 3, nombre: 'Short Beige Casual', precio: 3500, categoria: 'shorts', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Short+Beige' },
-        { id: 4, nombre: 'Sneakers Blancos', precio: 8500, categoria: 'zapatos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Sneakers' },
-        { id: 5, nombre: 'Conjunto Niña Amarillo', precio: 4200, categoria: 'ninos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Conjunto+Niño' }
-    ];
+        return [
+            { id: 1, nombre: 'Camisa Oxford Azul', precio: 4500, categoria: 'camisas', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Camisa+Azul' },
+            { id: 2, nombre: 'Pantalón Gris Formal', precio: 6500, categoria: 'pantalones', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Pantalon+Gris' },
+            { id: 3, nombre: 'Short Beige Casual', precio: 3500, categoria: 'shorts', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Short+Beige' },
+            { id: 4, nombre: 'Sneakers Blancos', precio: 8500, categoria: 'zapatos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Sneakers' },
+            { id: 5, nombre: 'Conjunto Niña Amarillo', precio: 4200, categoria: 'ninos', imagen_url: 'https://placehold.co/400x400/EEE/555?text=Conjunto+Niño' }
+        ];
     }
     
     function renderProducts(category) {
@@ -296,7 +325,7 @@
                         const mensaje = `Hola! Me interesa comprar: ${producto.nombre} - $${producto.precio} CUP`;
                         window.open(`https://wa.me/5351234567?text=${encodeURIComponent(mensaje)}`, '_blank');
                     } else {
-                        toggleModal(true);
+                        window.mostrarModal();
                     }
                 }
             };
@@ -322,6 +351,7 @@
     function initSearch() {
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
+        if (!searchInput || !searchBtn) return;
         const performSearch = () => {
             const term = searchInput.value.trim().toLowerCase();
             if (!term) {
@@ -489,9 +519,6 @@
         });
     }
     
-    // ========================================
-    // UTILIDADES
-    // ========================================
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -502,4 +529,4 @@
         });
     }
     
-})(); // Fin del IIFE
+})();
