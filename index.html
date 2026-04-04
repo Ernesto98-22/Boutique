@@ -42,7 +42,7 @@
                         <input type="search" id="searchInput" placeholder="Buscar productos..." aria-label="Buscar productos">
                         <button id="searchBtn" aria-label="Buscar"><i class="fas fa-search"></i></button>
                     </div>
-                    <button class="auth-btn" id="authBtn" aria-label="Acceder a tu cuenta"><i class="fas fa-user"></i> Acceder</button>
+                    <button class="auth-btn" id="authBtn" onclick="mostrarModal()" aria-label="Acceder a tu cuenta"><i class="fas fa-user"></i> Acceder</button>
                     <a href="#catalogo" class="nav-comprar" id="comprarNavBtn">Comprar <i class="fas fa-arrow-right"></i></a>
                 </div>
             </div>
@@ -310,8 +310,20 @@
         </div>
     </div>
 
+    <!-- Scripts: primero Supabase, luego credenciales y luego app.js -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js"></script>
+    <script>
+        // ========================================
+        // CONFIGURACIÓN DE SUPABASE (EMBEBIDA)
+        // ¡REEMPLAZA CON TUS DATOS REALES DE LA BOUTIQUE!
+        // ========================================
+        const SUPABASE_URL = 'https://TU_PROYECTO_BOUTIQUE.supabase.co';
+        const SUPABASE_ANON_KEY = 'TU_CLAVE_ANONIMA_AQUI';
+        
+        // Inicializar cliente de Supabase y exponerlo globalmente
+        window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('✅ Supabase inicializado correctamente');
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
