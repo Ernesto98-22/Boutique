@@ -3,8 +3,13 @@
 -- ========================================
 -- Ejecutar en el SQL Editor de Supabase
 
+-- Eliminar tablas si existen (para empezar limpio)
+DROP TABLE IF EXISTS productos CASCADE;
+DROP TABLE IF EXISTS reviews CASCADE;
+DROP TABLE IF EXISTS admin_emails CASCADE;
+
 -- Tabla de productos
-CREATE TABLE IF NOT EXISTS productos (
+CREATE TABLE productos (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     nombre TEXT NOT NULL,
     precio DECIMAL(10,2) NOT NULL,
@@ -17,7 +22,7 @@ CREATE TABLE IF NOT EXISTS productos (
 );
 
 -- Tabla de reseñas
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE reviews (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     nombre_usuario TEXT NOT NULL,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
@@ -26,18 +31,18 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Tabla de administradores (emails autorizados)
-CREATE TABLE IF NOT EXISTS admin_emails (
+-- Tabla de administradores
+CREATE TABLE admin_emails (
     email TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Índices
-CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria);
-CREATE INDEX IF NOT EXISTS idx_reviews_approved ON reviews(approved);
-CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at DESC);
+CREATE INDEX idx_productos_categoria ON productos(categoria);
+CREATE INDEX idx_reviews_approved ON reviews(approved);
+CREATE INDEX idx_reviews_created ON reviews(created_at DESC);
 
--- Función para actualizar updated_at
+-- Función y trigger para updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -46,46 +51,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para productos
 CREATE TRIGGER update_productos_updated_at
     BEFORE UPDATE ON productos
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- RLS (Row Level Security)
+-- RLS
 ALTER TABLE productos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_emails ENABLE ROW LEVEL SECURITY;
 
--- Políticas públicas
-CREATE POLICY "Anyone can view products" ON productos
-    FOR SELECT USING (true);
+-- Políticas
+CREATE POLICY "Anyone can view products" ON productos FOR SELECT USING (true);
+CREATE POLICY "Admins can manage products" ON productos FOR ALL USING (auth.email() IN (SELECT email FROM admin_emails));
 
-CREATE POLICY "Anyone can view approved reviews" ON reviews
-    FOR SELECT USING (approved = true);
+CREATE POLICY "Anyone can view approved reviews" ON reviews FOR SELECT USING (approved = true);
+CREATE POLICY "Authenticated users can insert reviews" ON reviews FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Admins can manage reviews" ON reviews FOR ALL USING (auth.email() IN (SELECT email FROM admin_emails));
 
-CREATE POLICY "Authenticated users can insert reviews" ON reviews
-    FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can read own admin status" ON admin_emails FOR SELECT USING (auth.email() = email);
 
--- Políticas para administradores (basadas en admin_emails)
-CREATE POLICY "Admins can manage products" ON productos
-    FOR ALL USING (auth.email() IN (SELECT email FROM admin_emails));
-
-CREATE POLICY "Admins can manage reviews" ON reviews
-    FOR ALL USING (auth.email() IN (SELECT email FROM admin_emails));
-
-CREATE POLICY "Admins can read admin_emails" ON admin_emails
-    FOR SELECT USING (auth.email() IN (SELECT email FROM admin_emails));
-
--- Datos de ejemplo
-INSERT INTO admin_emails (email) VALUES ('erneg442@gmail.com')
-    ON CONFLICT (email) DO NOTHING;
+-- Datos de ejemplo (cambia 'erneg442@gmail.com' por tu correo si quieres)
+INSERT INTO admin_emails (email) VALUES ('erneg442@gmail.com') ON CONFLICT DO NOTHING;
 
 INSERT INTO productos (nombre, precio, imagen_url, categoria) VALUES
-    ('Camisa Oxford Azul', 4500, 'https://images.pexels.com/photos/5654474/pexels-photo-5654474.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop', 'camisas'),
-    ('Pantalón Gris Formal', 6500, 'https://images.pexels.com/photos/1598507/pexels-photo-1598507.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop', 'pantalones'),
-    ('Short Beige Casual', 3500, 'https://images.pexels.com/photos/1081685/pexels-photo-1081685.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop', 'shorts'),
-    ('Sneakers Blancos', 8500, 'https://images.pexels.com/photos/1598505/pexels-photo-1598505.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop', 'zapatos'),
-    ('Conjunto Niña Amarillo', 4200, 'https://images.pexels.com/photos/1103831/pexels-photo-1103831.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop', 'ninos')
+    ('Camisa Oxford Azul', 4500, 'https://placehold.co/400x400/EEE/555?text=Camisa+Azul', 'camisas'),
+    ('Pantalón Gris Formal', 6500, 'https://placehold.co/400x400/EEE/555?text=Pantalon+Gris', 'pantalones'),
+    ('Short Beige Casual', 3500, 'https://placehold.co/400x400/EEE/555?text=Short+Beige', 'shorts'),
+    ('Sneakers Blancos', 8500, 'https://placehold.co/400x400/EEE/555?text=Sneakers', 'zapatos'),
+    ('Conjunto Niña Amarillo', 4200, 'https://placehold.co/400x400/EEE/555?text=Conjunto+Niño', 'ninos')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO reviews (nombre_usuario, rating, comentario, approved) VALUES
