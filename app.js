@@ -1,4 +1,4 @@
-// app.js - Paso Firme (versión boutique, con window.supabase)
+// app.js - Paso Firme (versión boutique final)
 (function() {
     'use strict';
     
@@ -61,9 +61,58 @@
         setTimeout(() => div.remove(), 5000);
     }
     
-    // ========================================
-    // AUTENTICACIÓN
-    // ========================================
+    // ========== NAVEGACIÓN MÓVIL (CORREGIDA) ==========
+    function initNavigation() {
+        const menuToggle = document.getElementById('menuToggle');
+        const navLinks = document.getElementById('navLinks');
+        const navActions = document.getElementById('navActions');
+        
+        if (menuToggle && navLinks && navActions) {
+            menuToggle.addEventListener('click', () => {
+                const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+                menuToggle.setAttribute('aria-expanded', !expanded);
+                navLinks.classList.toggle('active');
+                navActions.classList.toggle('active');
+                // Bloquear scroll cuando el menú está abierto
+                if (!expanded) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = '';
+                }
+            });
+            
+            // Cerrar menú al hacer clic en un enlace
+            document.querySelectorAll('.nav-links a').forEach(link => {
+                link.addEventListener('click', () => {
+                    navLinks.classList.remove('active');
+                    navActions.classList.remove('active');
+                    menuToggle.setAttribute('aria-expanded', 'false');
+                    document.body.style.overflow = '';
+                });
+            });
+        }
+        
+        // Smooth scroll para enlaces internos
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href !== '#') {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) target.scrollIntoView({ behavior: 'smooth' });
+                    // Cerrar menú si está abierto
+                    if (navLinks && navLinks.classList.contains('active')) {
+                        navLinks.classList.remove('active');
+                        navActions.classList.remove('active');
+                        if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+                        document.body.style.overflow = '';
+                    }
+                }
+            });
+        });
+    }
+    
+    // ========== AUTENTICACIÓN ==========
     async function checkSession() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -239,9 +288,7 @@
         }, 3000);
     }
     
-    // ========================================
-    // PRODUCTOS
-    // ========================================
+    // ========== PRODUCTOS ==========
     async function loadProducts() {
         const { data, error } = await supabase.from('productos').select('*');
         if (error) {
@@ -387,9 +434,7 @@
         searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
     }
     
-    // ========================================
-    // TESTIMONIOS (RESEÑAS)
-    // ========================================
+    // ========== TESTIMONIOS ==========
     async function loadTestimonios() {
         const { data, error } = await supabase
             .from('reviews')
@@ -439,9 +484,7 @@
         }
     }
     
-    // ========================================
-    // FAVORITOS (localStorage)
-    // ========================================
+    // ========== FAVORITOS ==========
     function loadFavoritosFromStorage() {
         const saved = localStorage.getItem('pasofirme_favoritos');
         if (saved) {
@@ -453,43 +496,7 @@
         localStorage.setItem('pasofirme_favoritos', JSON.stringify([...favoritos]));
     }
     
-    // ========================================
-    // NAVEGACIÓN Y EFECTOS
-    // ========================================
-    function initNavigation() {
-        const menuToggle = document.getElementById('menuToggle');
-        const navLinks = document.querySelector('.nav-links');
-        const navActions = document.querySelector('.nav-actions');
-        
-        if (menuToggle) {
-            menuToggle.onclick = () => {
-                const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
-                menuToggle.setAttribute('aria-expanded', !expanded);
-                navLinks.classList.toggle('active');
-                navActions.classList.toggle('active');
-            };
-        }
-        
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.onclick = () => {
-                navLinks.classList.remove('active');
-                navActions.classList.remove('active');
-                if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
-            };
-        });
-        
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                const href = this.getAttribute('href');
-                if (href !== '#') {
-                    e.preventDefault();
-                    const target = document.querySelector(href);
-                    if (target) target.scrollIntoView({ behavior: 'smooth' });
-                }
-            });
-        });
-    }
-    
+    // ========== EFECTOS DE SCROLL ==========
     function initScrollEffects() {
         const heroNav = document.querySelector('.hero-nav');
         window.addEventListener('scroll', () => {
@@ -497,7 +504,7 @@
                 heroNav.style.background = 'rgba(0,0,0,0.9)';
                 heroNav.style.backdropFilter = 'blur(10px)';
             } else {
-                heroNav.style.background = 'transparent';
+                heroNav.style.background = 'rgba(0,0,0,0.2)';
                 heroNav.style.backdropFilter = 'none';
             }
         });
@@ -528,5 +535,4 @@
             return m;
         });
     }
-    
 })();
