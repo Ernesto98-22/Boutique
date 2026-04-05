@@ -119,14 +119,16 @@
         // ========================================
         const SUPABASE_URL = 'https://jkptanntcnwyvefcoeul.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_QzksAjwRvfobZmfXykdTJw_ncgzw_DC';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Usamos un nombre distinto a "supabase" para evitar colisión con la variable global del constructor
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         let currentUser = null;
         let editingProductId = null;
         let productsData = [];
 
         document.addEventListener('DOMContentLoaded', async () => {
-            if (!supabase) { 
+            if (!supabaseClient) { 
                 document.getElementById('loginError').innerHTML = 'Error de conexión con Supabase. Verifica las credenciales.'; 
                 return;
             }
@@ -149,9 +151,9 @@
         });
 
         async function checkAdminSession() {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) return;
-            const { data: adminData } = await supabase.from('admin_emails').select('email').eq('email', session.user.email).single();
+            const { data: adminData } = await supabaseClient.from('admin_emails').select('email').eq('email', session.user.email).single();
             if (adminData) {
                 currentUser = session.user;
                 document.getElementById('loginContainer').style.display = 'none';
@@ -160,7 +162,7 @@
                 loadReviews();
                 updateStats();
             } else { 
-                await supabase.auth.signOut(); 
+                await supabaseClient.auth.signOut(); 
             }
         }
 
@@ -169,20 +171,20 @@
             const password = document.getElementById('adminPassword').value;
             const errorDiv = document.getElementById('loginError');
             if (!email || !password) { errorDiv.innerHTML = 'Completa todos los campos'; return; }
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
             if (error) { errorDiv.innerHTML = 'Credenciales inválidas'; return; }
-            const { data: adminData } = await supabase.from('admin_emails').select('email').eq('email', email).single();
-            if (!adminData) { errorDiv.innerHTML = 'No tienes permisos de administrador'; await supabase.auth.signOut(); return; }
-            currentUser = (await supabase.auth.getUser()).data.user;
+            const { data: adminData } = await supabaseClient.from('admin_emails').select('email').eq('email', email).single();
+            if (!adminData) { errorDiv.innerHTML = 'No tienes permisos de administrador'; await supabaseClient.auth.signOut(); return; }
+            currentUser = (await supabaseClient.auth.getUser()).data.user;
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('dashboard').style.display = 'block';
             loadProducts(); loadReviews(); updateStats();
         }
 
-        async function logout() { await supabase.auth.signOut(); location.reload(); }
+        async function logout() { await supabaseClient.auth.signOut(); location.reload(); }
 
         async function loadProducts() {
-            const { data } = await supabase.from('productos').select('*').order('created_at', { ascending: false });
+            const { data } = await supabaseClient.from('productos').select('*').order('created_at', { ascending: false });
             productsData = data || [];
             const tbody = document.getElementById('productsTableBody');
             if (!tbody) return;
@@ -209,7 +211,7 @@
                 document.getElementById('productModal').classList.add('active');
             }
         };
-        window.deleteProduct = async (id) => { if (confirm('¿Eliminar?')) { await supabase.from('productos').delete().eq('id', id); loadProducts(); updateStats(); } };
+        window.deleteProduct = async (id) => { if (confirm('¿Eliminar?')) { await supabaseClient.from('productos').delete().eq('id', id); loadProducts(); updateStats(); } };
         function openProductModal() { editingProductId = null; document.getElementById('prodNombre').value = ''; document.getElementById('prodPrecio').value = ''; document.getElementById('prodImagen').value = ''; document.getElementById('prodCategoria').value = 'camisas'; document.getElementById('modalTitle').innerHTML = 'Agregar Producto'; document.getElementById('productModal').classList.add('active'); }
         function closeProductModal() { document.getElementById('productModal').classList.remove('active'); }
         async function saveProduct() {
@@ -218,13 +220,13 @@
             const imagen_url = document.getElementById('prodImagen').value.trim();
             const categoria = document.getElementById('prodCategoria').value;
             if (!nombre || isNaN(precio)) { alert('Datos inválidos'); return; }
-            if (editingProductId) { await supabase.from('productos').update({ nombre, precio, imagen_url, categoria }).eq('id', editingProductId); }
-            else { await supabase.from('productos').insert([{ nombre, precio, imagen_url, categoria }]); }
+            if (editingProductId) { await supabaseClient.from('productos').update({ nombre, precio, imagen_url, categoria }).eq('id', editingProductId); }
+            else { await supabaseClient.from('productos').insert([{ nombre, precio, imagen_url, categoria }]); }
             closeProductModal(); loadProducts(); updateStats();
         }
 
         async function loadReviews() {
-            const { data } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
+            const { data } = await supabaseClient.from('reviews').select('*').order('created_at', { ascending: false });
             const pending = data.filter(r => !r.approved);
             const approved = data.filter(r => r.approved);
             document.getElementById('pendingReviewsList').innerHTML = pending.map(r => renderReviewItem(r, false)).join('');
@@ -235,12 +237,12 @@
             const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
             return `<div class="review-item"><div class="review-content"><strong>${escapeHtml(r.nombre_usuario)}</strong><div class="review-rating">${stars}</div><p>${escapeHtml(r.comentario)}</p><small>${new Date(r.created_at).toLocaleDateString()}</small></div><div class="review-actions">${!isApproved ? `<button class="action-btn approve-btn" onclick="window.approveReview('${r.id}')">Aprobar</button>` : ''}<button class="action-btn delete-btn" onclick="window.deleteReview('${r.id}')">Eliminar</button></div></div>`;
         }
-        window.approveReview = async (id) => { await supabase.from('reviews').update({ approved: true }).eq('id', id); loadReviews(); updateStats(); };
-        window.deleteReview = async (id) => { if (confirm('¿Eliminar reseña?')) { await supabase.from('reviews').delete().eq('id', id); loadReviews(); updateStats(); } };
+        window.approveReview = async (id) => { await supabaseClient.from('reviews').update({ approved: true }).eq('id', id); loadReviews(); updateStats(); };
+        window.deleteReview = async (id) => { if (confirm('¿Eliminar reseña?')) { await supabaseClient.from('reviews').delete().eq('id', id); loadReviews(); updateStats(); } };
 
         async function updateStats() {
-            const { count: productCount } = await supabase.from('productos').select('*', { count: 'exact', head: true });
-            const { count: pendingCount } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('approved', false);
+            const { count: productCount } = await supabaseClient.from('productos').select('*', { count: 'exact', head: true });
+            const { count: pendingCount } = await supabaseClient.from('reviews').select('*', { count: 'exact', head: true }).eq('approved', false);
             document.getElementById('totalProducts').innerText = productCount || 0;
             document.getElementById('pendingReviews').innerText = pendingCount || 0;
         }
