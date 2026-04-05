@@ -44,16 +44,20 @@ CREATE INDEX idx_reviews_created ON reviews(created_at DESC);
 
 -- Función y trigger para updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
     NEW.updated_at = now();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 CREATE TRIGGER update_productos_updated_at
     BEFORE UPDATE ON productos
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS
 ALTER TABLE productos ENABLE ROW LEVEL SECURITY;

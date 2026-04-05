@@ -1133,3 +1133,19 @@ h1, h2, h3, h4, h5, h6 {
         grid-template-columns: 1fr;
     }
 }
+.menu-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.8rem;
+    color: white;
+    cursor: pointer;
+    z-index: 110;
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .menu-close-btn {
+        display: block;
+    }
+}

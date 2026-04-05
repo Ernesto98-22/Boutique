@@ -30,6 +30,11 @@
                     <i class="fas fa-bars"></i>
                 </button>
                 
+                <!-- Botón de cierre del menú (solo visible en móvil) -->
+                <div class="menu-close-btn" id="menuCloseBtn" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </div>
+                
                 <ul class="nav-links" id="navLinks">
                     <li><a href="#inicio">Inicio</a></li>
                     <li><a href="#catalogo">Catálogo</a></li>
@@ -48,7 +53,7 @@
             </div>
         </nav>
         
-        <!-- Hero Content -->
+        <!-- Hero Content (resto igual, no se modifica) -->
         <div class="hero-content">
             <div class="hero-text-left">
                 <h1 class="hero-slogan">ESTILO QUE DEFINE<br>TU LEGADO</h1>
@@ -100,7 +105,7 @@
         </div>
     </header>
 
-    <!-- CATÁLOGO SECTION -->
+    <!-- CATÁLOGO SECTION (sin cambios) -->
     <section class="section catalog-section" id="catalogo" role="region" aria-labelledby="catalogo-title">
         <div class="container">
             <div class="catalogo-header">
@@ -114,8 +119,7 @@
                 </div>
             </div>
             
-            <!-- Category Filter -->
-            <div class="category-bar centered" role="tablist" aria-label="Filtrar por categoría">
+            <div class="category-bar centered" role="tablist">
                 <button class="cat-btn active" data-category="todos" role="tab" aria-selected="true">Todas</button>
                 <button class="cat-btn" data-category="camisas" role="tab" aria-selected="false">Camisas</button>
                 <button class="cat-btn" data-category="pantalones" role="tab" aria-selected="false">Pantalones</button>
@@ -124,10 +128,7 @@
                 <button class="cat-btn" data-category="ninos" role="tab" aria-selected="false">Niños</button>
             </div>
             
-            <!-- Products Grid -->
-            <div class="productos-grid" id="productosGrid" role="tabpanel" aria-label="Productos">
-                <!-- Products will be loaded dynamically -->
-            </div>
+            <div class="productos-grid" id="productosGrid" role="tabpanel"></div>
             
             <div class="catalogo-footer">
                 <p>¿No encuentras lo que buscas?</p>
@@ -136,7 +137,7 @@
         </div>
     </section>
 
-    <!-- SOBRE NOSOTROS SECTION -->
+    <!-- SOBRE NOSOTROS SECTION (sin cambios) -->
     <section class="section about-section" id="nosotros" role="region" aria-labelledby="nosotros-title">
         <div class="container">
             <div class="about-header">
@@ -179,7 +180,7 @@
         </div>
     </section>
 
-    <!-- TESTIMONIOS SECTION -->
+    <!-- TESTIMONIOS SECTION (sin cambios) -->
     <section class="section testimonials-section" id="testimonios" role="region" aria-labelledby="testimonios-title">
         <div class="container">
             <div class="two-columns">
@@ -208,7 +209,7 @@
         </div>
     </section>
 
-    <!-- FOOTER -->
+    <!-- FOOTER (sin cambios) -->
     <footer class="footer" role="contentinfo">
         <div class="footer-bg" aria-hidden="true"></div>
         <div class="footer-content">
@@ -238,12 +239,12 @@
         </div>
     </footer>
 
-    <!-- WhatsApp Float -->
-    <a href="https://wa.me/5351234567" class="whatsapp-float" aria-label="Contactar por WhatsApp" target="_blank" rel="noopener">
+    <!-- WhatsApp Float con número actualizado -->
+    <a href="https://wa.me/5355555555" class="whatsapp-float" aria-label="Contactar por WhatsApp" target="_blank" rel="noopener">
         <i class="fab fa-whatsapp"></i>
     </a>
 
-    <!-- Auth Modal -->
+    <!-- Auth Modal (sin cambios) -->
     <div class="modal" id="authModal" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
         <div class="modal-content">
             <button class="close-modal" id="closeModal" aria-label="Cerrar modal"><i class="fas fa-times"></i></button>
@@ -265,7 +266,7 @@
                 <button type="submit" class="submit-btn">Ingresar</button>
                 <div class="form-status" id="loginStatus"></div>
             </form>
-            <!-- Register Form -->
+            <!-- Register Form (teléfono con prefijo +53 por defecto) -->
             <form class="auth-form" id="registerForm" novalidate>
                 <div class="form-group">
                     <label for="registerUsername">Nombre de usuario</label>
@@ -277,7 +278,7 @@
                 </div>
                 <div class="form-group">
                     <label for="registerPhone">Teléfono (+53)</label>
-                    <input type="tel" id="registerPhone" placeholder="+53 5 123 4567">
+                    <input type="tel" id="registerPhone" value="+53 " placeholder="+53 5 123 4567">
                 </div>
                 <div class="form-group">
                     <label for="registerPassword">Contraseña</label>
@@ -294,7 +295,6 @@
     <script>
         // ========================================
         // CONFIGURACIÓN DE SUPABASE (EMBEBIDA)
-        // ¡REEMPLAZA CON TUS DATOS REALES DE LA BOUTIQUE!
         // ========================================
         const SUPABASE_URL = 'https://jkptanntcnwyvefcoeul.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_QzksAjwRvfobZmfXykdTJw_ncgzw_DC';

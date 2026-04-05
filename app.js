@@ -1,4 +1,4 @@
-// app.js - Paso Firme (versión boutique final)
+// app.js - Paso Firme (versión boutique con X para cerrar menú y número actualizado)
 (function() {
     'use strict';
     
@@ -51,6 +51,7 @@
         initAuthModal();
         initScrollEffects();
         loadFavoritosFromStorage();
+        initReservationForm(); // Añadido para manejar el teléfono en reservas
     });
     
     function mostrarErrorGlobal(msg) {
@@ -61,9 +62,10 @@
         setTimeout(() => div.remove(), 5000);
     }
     
-    // ========== NAVEGACIÓN MÓVIL (CORREGIDA) ==========
+    // ========== NAVEGACIÓN MÓVIL (con botón de cierre) ==========
     function initNavigation() {
         const menuToggle = document.getElementById('menuToggle');
+        const menuCloseBtn = document.getElementById('menuCloseBtn');
         const navLinks = document.getElementById('navLinks');
         const navActions = document.getElementById('navActions');
         
@@ -73,13 +75,24 @@
                 menuToggle.setAttribute('aria-expanded', !expanded);
                 navLinks.classList.toggle('active');
                 navActions.classList.toggle('active');
-                // Bloquear scroll cuando el menú está abierto
+                if (menuCloseBtn) menuCloseBtn.style.display = 'block';
                 if (!expanded) {
                     document.body.style.overflow = 'hidden';
                 } else {
                     document.body.style.overflow = '';
                 }
             });
+            
+            // Cerrar con la X
+            if (menuCloseBtn) {
+                menuCloseBtn.addEventListener('click', () => {
+                    navLinks.classList.remove('active');
+                    navActions.classList.remove('active');
+                    menuToggle.setAttribute('aria-expanded', 'false');
+                    document.body.style.overflow = '';
+                    menuCloseBtn.style.display = 'none';
+                });
+            }
             
             // Cerrar menú al hacer clic en un enlace
             document.querySelectorAll('.nav-links a').forEach(link => {
@@ -88,6 +101,7 @@
                     navActions.classList.remove('active');
                     menuToggle.setAttribute('aria-expanded', 'false');
                     document.body.style.overflow = '';
+                    if (menuCloseBtn) menuCloseBtn.style.display = 'none';
                 });
             });
         }
@@ -106,13 +120,14 @@
                         navActions.classList.remove('active');
                         if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
                         document.body.style.overflow = '';
+                        if (menuCloseBtn) menuCloseBtn.style.display = 'none';
                     }
                 }
             });
         });
     }
     
-    // ========== AUTENTICACIÓN ==========
+    // ========== AUTENTICACIÓN (sin cambios en la lógica) ==========
     async function checkSession() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -162,7 +177,7 @@
             document.querySelectorAll('#comprarNavBtn, .btn-primary[href="#catalogo"], .catalogo-footer .btn-primary').forEach(btn => {
                 btn.onclick = (e) => {
                     e.preventDefault();
-                    window.open('https://wa.me/5351234567?text=Hola,%20quiero%20comprar%20en%20Paso%20Firme', '_blank');
+                    window.open('https://wa.me/5355555555?text=Hola,%20quiero%20comprar%20en%20Paso%20Firme', '_blank');
                 };
             });
         } else {
@@ -247,12 +262,8 @@
                 showFormStatus(statusDiv, 'La contraseña debe tener al menos 6 caracteres', 'error');
                 return;
             }
-            if (!phone.startsWith('+53')) phone = '+53 ' + phone;
-            const phonePattern = /^\+53\s?[0-9]{8}$/;
-            if (!phonePattern.test(phone)) {
-                showFormStatus(statusDiv, 'Teléfono debe tener formato +53 seguido de 8 dígitos', 'error');
-                return;
-            }
+            // No forzamos el prefijo +53, solo validamos si el usuario lo dejó
+            // El campo ya trae '+53 ' por defecto desde el HTML
             const userEmail = email ? email : phone.replace(/\s/g, '') + '@temp.local';
             const { error } = await supabase.auth.signUp({
                 email: userEmail,
@@ -266,6 +277,8 @@
                 setTimeout(() => {
                     document.querySelector('.tab-btn[data-tab="login"]').click();
                     registerForm.reset();
+                    // Restaurar el prefijo +53 después de resetear el formulario
+                    document.getElementById('registerPhone').value = '+53 ';
                 }, 2000);
             }
         };
@@ -288,7 +301,65 @@
         }, 3000);
     }
     
-    // ========== PRODUCTOS ==========
+    // ========== RESERVAS (con prefijo +53 por defecto y número de WhatsApp actualizado) ==========
+    function initReservationForm() {
+        const form = document.getElementById('reservationForm');
+        if (!form) return;
+        
+        const fechaInput = document.getElementById('fecha');
+        if (fechaInput) {
+            const today = new Date().toISOString().split('T')[0];
+            fechaInput.min = today;
+        }
+        
+        // Configurar teléfono con prefijo +53 por defecto (solo si no tiene valor)
+        const telefonoInput = document.getElementById('telefono');
+        if (telefonoInput && (!telefonoInput.value || telefonoInput.value === '')) {
+            telefonoInput.value = '+53 ';
+        }
+        
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const nombre = document.getElementById('nombre').value.trim();
+            let telefono = document.getElementById('telefono').value.trim();
+            const fecha = document.getElementById('fecha').value;
+            const hora = document.getElementById('hora').value;
+            const servicios = Array.from(document.querySelectorAll('input[name="servicio"]:checked')).map(cb => cb.value);
+            const notas = document.getElementById('notas').value.trim();
+            const statusDiv = document.getElementById('formStatus');
+            
+            if (!nombre || !telefono || !fecha || !hora || servicios.length === 0) {
+                showFormStatus(statusDiv, 'Completa todos los campos y selecciona al menos un servicio', 'error');
+                return;
+            }
+            
+            showFormStatus(statusDiv, 'Guardando reserva...', 'loading');
+            
+            const { error } = await supabase.from('reservas').insert([{
+                nombre,
+                telefono,
+                fecha,
+                hora,
+                servicios: servicios.join(', '),
+                notas,
+                estado: 'pendiente'
+            }]);
+            
+            if (error) {
+                showFormStatus(statusDiv, 'Error al guardar: ' + error.message, 'error');
+            } else {
+                showFormStatus(statusDiv, '¡Reserva creada! Te contactaremos pronto.', 'success');
+                form.reset();
+                document.querySelectorAll('input[name="servicio"]').forEach(cb => cb.checked = false);
+                if (telefonoInput) telefonoInput.value = '+53 ';
+                const mensaje = `Hola, soy ${nombre}. Quiero reservar los servicios: ${servicios.join(', ')} para el ${fecha} a las ${hora}. Mi teléfono: ${telefono}`;
+                // Número de WhatsApp actualizado
+                window.open(`https://wa.me/5355555555?text=${encodeURIComponent(mensaje)}`, '_blank');
+            }
+        };
+    }
+    
+    // ========== PRODUCTOS (número de WhatsApp actualizado) ==========
     async function loadProducts() {
         const { data, error } = await supabase.from('productos').select('*');
         if (error) {
@@ -370,7 +441,7 @@
                 if (producto) {
                     if (currentUser) {
                         const mensaje = `Hola! Me interesa comprar: ${producto.nombre} - $${producto.precio} CUP`;
-                        window.open(`https://wa.me/5351234567?text=${encodeURIComponent(mensaje)}`, '_blank');
+                        window.open(`https://wa.me/5355555555?text=${encodeURIComponent(mensaje)}`, '_blank');
                     } else {
                         window.mostrarModal();
                     }
@@ -434,7 +505,7 @@
         searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
     }
     
-    // ========== TESTIMONIOS ==========
+    // ========== TESTIMONIOS (sin cambios) ==========
     async function loadTestimonios() {
         const { data, error } = await supabase
             .from('reviews')
